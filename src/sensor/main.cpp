@@ -88,11 +88,8 @@ void setup() {
     );
     pConfigChar->setCallbacks(new ConfigCB());
 
-    pService->start();
-
     auto* pAdv = NimBLEDevice::getAdvertising();
     pAdv->addServiceUUID(TEMPIO_SERVICE_UUID);
-    pAdv->setScanResponse(true);
     pAdv->start();
 }
 
