@@ -1,26 +1,33 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// ble_peripheral.cpp — 센서노드 BLE Peripheral (딥슬립 one-shot 버전)
+// ═══════════════════════════════════════════════════════════════════════════
+
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <cstring>
 #include "protocol.h"
+#include "node_state.h"
 #include "ble_peripheral.h"
 
 static constexpr uint8_t LED_PIN = 8;
 
-static NimBLECharacteristic* pDataChar = nullptr;
-static NimBLECharacteristic* pConfigChar = nullptr;
-// volatile: BLE 태스크와 loop 태스크에서 동시 접근하는 플래그
-static volatile bool deviceConnected = false;
-static volatile bool sendNodeInfo = false;
-static unsigned long lastPrint = 0;
-// millis 기반 non-blocking 센서 전송 타이머
-static unsigned long lastSend = 0;
-static constexpr unsigned long SEND_INTERVAL_MS = 3000;
+// ──────────── 상태 ────────────
+static NodeState state;
 
-// ──────────── 콜백 (static 인스턴스로 힙 할당 방지) ────────────
+static NimBLECharacteristic* pDataChar   = nullptr;
+static NimBLECharacteristic* pConfigChar = nullptr;
+static volatile bool     deviceConnected = false;
+static volatile bool     configReceived  = false;
+static volatile uint16_t hubConnHandle   = 0;
+
+// ══════════════════════════════════════════════════════════════════════
+// BLE 콜백
+// ══════════════════════════════════════════════════════════════════════
 
 class ServerCB : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer* s, NimBLEConnInfo& info) override {
         deviceConnected = true;
-        sendNodeInfo = true;
+        hubConnHandle = info.getConnHandle();
         digitalWrite(LED_PIN, LOW);
         Serial.printf("connected: %s\n", info.getAddress().toString().c_str());
     }
@@ -29,7 +36,6 @@ class ServerCB : public NimBLEServerCallbacks {
         deviceConnected = false;
         digitalWrite(LED_PIN, HIGH);
         Serial.printf("disconnected (reason=%d)\n", reason);
-        NimBLEDevice::startAdvertising();
     }
 };
 
@@ -39,66 +45,59 @@ class ConfigCB : public NimBLECharacteristicCallbacks {
         if (val.length() < 1) return;
 
         auto type = static_cast<MsgType>(val[0]);
+
         switch (type) {
             case MsgType::ASSIGN_ID: {
                 if (val.length() >= sizeof(AssignId)) {
-                    auto* cmd = reinterpret_cast<const AssignId*>(val.data());
-                    Serial.printf(">> assigned id: %u\n", cmd->node_id);
-                    // TODO: NVS에 저장
+                    AssignId cmd;
+                    memcpy(&cmd, val.data(), sizeof(cmd));
+                    state.setNodeId(cmd.node_id);
+                    Serial.printf(">> assigned id: %u\n", cmd.node_id);
                 }
                 break;
             }
             case MsgType::SET_INTERVAL: {
                 if (val.length() >= sizeof(SetInterval)) {
-                    auto* cmd = reinterpret_cast<const SetInterval*>(val.data());
-                    Serial.printf(">> interval: %u sec\n", cmd->interval_sec);
-                    // TODO: 딥슬립 주기 변경
+                    SetInterval cmd;
+                    memcpy(&cmd, val.data(), sizeof(cmd));
+                    state.setSleepInterval(cmd.interval_sec);
+                    Serial.printf(">> interval: %u sec\n", state.sleepInterval());
                 }
                 break;
             }
             case MsgType::RESET_NODE: {
                 if (val.length() >= sizeof(ResetNode)) {
-                    auto* cmd = reinterpret_cast<const ResetNode*>(val.data());
-                    Serial.printf(">> reset level: %u\n", cmd->level);
-                    // TODO: 레벨별 리셋 처리
+                    ResetNode cmd;
+                    memcpy(&cmd, val.data(), sizeof(cmd));
+                    Serial.printf(">> reset level: %u\n", cmd.level);
+                    if (cmd.level >= 1) state.clear();
+                    state.end();
+                    ESP.restart();
                 }
                 break;
             }
             default:
                 Serial.printf(">> unknown config: 0x%02x\n", val[0]);
         }
+
+        configReceived = true;
     }
 };
 
-// static 인스턴스 — new 대신 재사용
-static ServerCB serverCb;
-static ConfigCB configCb;
+static ServerCB  serverCb;
+static ConfigCB  configCb;
 
-// ──────────── mock 센서 데이터 ────────────
-// TODO: Phase 2에서 DHT22 실제 읽기로 교체
-
-static void sendSensorData() {
-    // pDataChar null 체크 (초기화 실패 등 방어)
-    if (!pDataChar) return;
-
-    SensorData data;
-    data.temp = 24.0f + random(-30, 30) / 10.0f;
-    data.humidity = 55.0f + random(-50, 50) / 10.0f;
-    data.ldr = random(100, 3000);
-    data.battery_mv = 2900 + random(0, 300);
-
-    pDataChar->setValue(reinterpret_cast<uint8_t*>(&data), sizeof(data));
-    pDataChar->notify();
-
-    Serial.printf("<< %.1f C  %.1f %%  ldr=%u  bat=%umV\n",
-                  data.temp, data.humidity, data.ldr, data.battery_mv);
-}
-
-// ──────────── 공개 API ────────────
+// ══════════════════════════════════════════════════════════════════════
+// 공개 API
+// ══════════════════════════════════════════════════════════════════════
 
 void ble_peripheral_init() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
+
+    state.begin();
+    Serial.printf("state: node_id=%u interval=%u\n",
+                  state.nodeId(), state.sleepInterval());
 
     NimBLEDevice::init("tempio-sensor");
     NimBLEDevice::setMTU(512);
@@ -119,6 +118,7 @@ void ble_peripheral_init() {
     );
     pConfigChar->setCallbacks(&configCb);
 
+    pService->start();
     pServer->start();
 
     auto* pAdv = NimBLEDevice::getAdvertising();
@@ -126,40 +126,72 @@ void ble_peripheral_init() {
     pAdv->start();
 }
 
-void ble_peripheral_loop() {
-    if (!deviceConnected) {
-        if (millis() - lastPrint > 5000) {
-            lastPrint = millis();
-            Serial.println("advertising...");
-        }
-        delay(500);
-        return;
+bool ble_wait_connect(uint32_t timeout_ms) {
+    unsigned long start = millis();
+    while (!deviceConnected) {
+        if (millis() - start >= timeout_ms) return false;
+        delay(10);
+    }
+    return true;
+}
+
+bool ble_wait_config(uint32_t timeout_ms) {
+    unsigned long start = millis();
+    while (!configReceived) {
+        if (!deviceConnected) return false;
+        if (millis() - start >= timeout_ms) return false;
+        delay(10);
+    }
+    return true;
+}
+
+void ble_send_node_info() {
+    if (!pDataChar || !deviceConnected) return;
+
+    NodeInfo info;
+    info.node_type  = NodeType::SENSOR;
+    info.node_id    = state.nodeId();
+    info.battery_mv = 3100;  // TODO: ADC 실측
+    info.fw_major   = 0;
+    info.fw_minor   = 1;
+
+    pDataChar->setValue(reinterpret_cast<uint8_t*>(&info), sizeof(info));
+    pDataChar->notify();
+    Serial.printf("<< NodeInfo: id=%u\n", state.nodeId());
+}
+
+void ble_send_sensor_data() {
+    if (!pDataChar || !deviceConnected) return;
+
+    SensorData data;
+    data.temp       = 24.0f + random(-30, 30) / 10.0f;  // TODO: 실제 센서
+    data.humidity   = 55.0f + random(-50, 50) / 10.0f;
+    data.ldr        = random(100, 3000);
+    data.battery_mv = 2900 + random(0, 300);
+
+    pDataChar->setValue(reinterpret_cast<uint8_t*>(&data), sizeof(data));
+    pDataChar->notify();
+    Serial.printf("<< %.1f C  %.1f %%  ldr=%u  bat=%umV\n",
+                  data.temp, data.humidity, data.ldr, data.battery_mv);
+}
+
+void ble_disconnect() {
+    if (deviceConnected) {
+        auto* pServer = NimBLEDevice::createServer();
+        pServer->disconnect(hubConnHandle);
+        unsigned long start = millis();
+        while (deviceConnected && millis() - start < 500) delay(10);
     }
 
-    if (sendNodeInfo) {
-        sendNodeInfo = false;
-        if (!pDataChar) return;
-
-        NodeInfo info;
-        info.node_type = NodeType::SENSOR;
-        info.node_id = 0; // TODO: NVS에서 읽기
-        info.battery_mv = 3100;
-        info.fw_major = 0;
-        info.fw_minor = 1;
-        pDataChar->setValue(reinterpret_cast<uint8_t*>(&info), sizeof(info));
-        pDataChar->notify();
-        Serial.println("<< NodeInfo sent");
-        lastSend = millis();
-        return;
-    }
-
-    // millis() 기반 non-blocking 전송 (delay(3000) 대신)
-    if (millis() - lastSend >= SEND_INTERVAL_MS) {
-        lastSend = millis();
-        sendSensorData();
-    }
+    state.end();
+    NimBLEDevice::deinit(false);
+    delay(50);
 }
 
 bool ble_is_connected() {
     return deviceConnected;
+}
+
+uint16_t ble_get_sleep_interval() {
+    return state.sleepInterval();
 }

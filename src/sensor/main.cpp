@@ -1,24 +1,39 @@
-// Arduino 프레임워크의 핵심 헤더. digitalWrite, Serial, delay 등 모든 기본 함수 포함
+// 센서노드 — 딥슬립 one-shot 패턴
+//
+// wake → BLE 초기화 → 허브 연결 대기 → 허브 준비 대기(ASSIGN_ID 수신) →
+// 데이터 전송 → 추가 명령 대기 → disconnect → 딥슬립 → (반복)
+
 #include <Arduino.h>
-// BLE Peripheral(센서노드) 기능을 모아둔 우리 파일. init/loop/is_connected 함수 선언
+#include <esp_sleep.h>
 #include "ble_peripheral.h"
 
-// BLE 초기화(NimBLEDevice::init)가 실행되면 USB CDC(시리얼 통신)가 잠깐 끊김.
-// 그래서 setup() 안에서 Serial.println() 해도 PC 시리얼 모니터에 안 보임.
 void setup() {
-    // 3초 대기. 보드에 전원이 들어온 뒤 USB 연결이 안정될 시간을 줌
-    delay(3000);
-    // 시리얼 통신 시작. 115200 = 초당 115200비트 속도 (baud rate)
     Serial.begin(115200);
-    // Serial이 준비될 때까지 최대 3초 대기. 건전지 구동 시 무한 대기 방지
-    while (!Serial && millis() < 6000) { delay(10); }
+    delay(100);
 
-    // BLE Peripheral 모드 초기화 — 서비스/특성 생성, 광고 시작 등
     ble_peripheral_init();
+
+    if (ble_wait_connect(5000)) {
+        // 허브가 서비스 탐색 + 구독 + ASSIGN_ID 전송을 완료할 때까지 대기.
+        // ASSIGN_ID가 도착하면 허브의 subscribe가 끝났다는 뜻 → 데이터 전송 안전.
+        ble_wait_config(3000);
+
+        ble_send_node_info();
+        delay(100);
+        ble_send_sensor_data();
+
+        // 추가 명령(SET_INTERVAL 등) 수신 여유
+        delay(500);
+    } else {
+        Serial.println("no hub, sleeping");
+    }
+
+    ble_disconnect();
+
+    uint16_t interval = ble_get_sleep_interval();
+    Serial.printf("sleep %u sec\n", interval);
+    esp_sleep_enable_timer_wakeup((uint64_t)interval * 1000000ULL);
+    esp_deep_sleep_start();
 }
 
-// loop()는 Arduino가 무한 반복 호출하는 함수. while(true)와 같음
-void loop() {
-    // BLE Peripheral의 매 프레임 처리 — 센서값 전송, 상태 출력 등
-    ble_peripheral_loop();
-}
+void loop() {}

@@ -1,18 +1,29 @@
-// #pragma once = 이 헤더 파일이 여러 번 include 되어도 한 번만 처리하라는 지시.
-// 없으면 같은 선언이 중복돼서 컴파일 에러남
 #pragma once
+#include <stdint.h>
 
-// BLE Peripheral — 센서 데이터 광고·전송, 허브 명령 수신
-//
-// [완료] TEMPIO UUID로 광고 → 허브 연결 수락
-// [완료] 연결 시 NodeInfo 전송 + 주기적 SensorData notify
-// [완료] CONFIG 특성으로 ASSIGN_ID/SET_INTERVAL/RESET 수신
-// [TODO] 실제 센서 연결 — DHT22 → SHT40 (Phase 2)
-// [TODO] 딥슬립 (Phase 7)
-
-// BLE Peripheral 초기화. 서비스/특성 생성, 광고 시작. setup()에서 한 번만 호출
+// BLE Peripheral 초기화.
+// NimBLE 시작 + Server/Service/Characteristic 생성 + 광고 시작.
+// NVS에서 node_id, sleep_interval 복원.
 void ble_peripheral_init();
-// BLE Peripheral 매 프레임 처리. 센서값 전송, 상태 출력. loop()에서 반복 호출
-void ble_peripheral_loop();
-// 현재 허브와 BLE 연결되어 있는지 여부를 반환. true = 연결됨
+
+// 허브 연결을 기다린다. timeout_ms 안에 연결되면 true.
+bool ble_wait_connect(uint32_t timeout_ms);
+
+// 허브가 CONFIG에 write할 때까지 기다린다.
+// 허브는 subscribe 완료 후 ASSIGN_ID를 쓰므로, 이게 오면 데이터 전송 안전.
+bool ble_wait_config(uint32_t timeout_ms);
+
+// NodeInfo(자기 소개) 전송.
+void ble_send_node_info();
+
+// 센서 데이터 전송.
+void ble_send_sensor_data();
+
+// 명시적 BLE 연결 해제 + NVS 닫기 + BLE 스택 종료.
+void ble_disconnect();
+
+// 현재 연결 여부.
 bool ble_is_connected();
+
+// 딥슬립 주기 (초). 10~3600 범위. 허브가 SET_INTERVAL로 변경 가능.
+uint16_t ble_get_sleep_interval();
