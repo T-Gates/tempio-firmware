@@ -377,7 +377,7 @@ int ble_connected_count() {
 // 특정 노드에 명령 전송. MAC 주소로 슬롯 찾고 CONFIG 특성에 write.
 // 예: SET_INTERVAL, RESET_NODE 등을 서버→허브→노드로 내릴 때 사용.
 bool ble_send_to_node(const char* addrStr, const void* data, size_t len) {
-    NimBLEAddress addr(addrStr);
+    NimBLEAddress addr(std::string(addrStr), 0);
     int slot = findSlotByAddr(addr);
     if (slot < 0 || !nodes[slot].configChar) return false;
 
