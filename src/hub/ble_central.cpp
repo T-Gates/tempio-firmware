@@ -110,14 +110,14 @@ static int activeCount() {
     return count;
 }
 
-// 끊긴 클라이언트를 NimBLE 내부 풀에 반환 (메모리 해제).
-// onDisconnect 콜백에서는 used=false만 표시하고, 실제 삭제는 여기서.
-// 왜? 콜백 안에서 deleteClient 하면 "내가 타고 있는 버스를 폭파"하는 꼴.
+// 끊긴 슬롯의 참조를 정리한다.
+// 클라이언트 객체 자체는 삭제하지 않음 — NimBLE가 내부 풀에 보관하다가
+// createClient() 호출 시 끊긴 클라이언트를 자동 재활용한다.
 static void cleanupDisconnected() {
     for (int i = 0; i < MAX_NODES; i++) {
         if (!nodes[i].used && nodes[i].client) {
-            NimBLEDevice::deleteClient(nodes[i].client);
             nodes[i].client = nullptr;
+            nodes[i].configChar = nullptr;
         }
     }
 }
@@ -269,7 +269,7 @@ static bool connectToNode(const NimBLEAddress& addr) {
     // 2) BLE 연결 — 실패하면 클라이언트 반환
     if (!client->connect(addr)) {
         Serial.printf("connect failed: %s\n", addr.toString().c_str());
-        NimBLEDevice::deleteClient(client);
+        client->disconnect();
         return false;
     }
 
@@ -278,7 +278,7 @@ static bool connectToNode(const NimBLEAddress& addr) {
     if (!svc) {
         Serial.println("service not found");
         client->disconnect();
-        NimBLEDevice::deleteClient(client);
+        client->disconnect();
         return false;
     }
 
@@ -289,7 +289,7 @@ static bool connectToNode(const NimBLEAddress& addr) {
     } else {
         Serial.println("DATA subscribe failed");
         client->disconnect();
-        NimBLEDevice::deleteClient(client);
+        client->disconnect();
         return false;
     }
 
