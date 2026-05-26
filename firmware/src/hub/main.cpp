@@ -1,9 +1,9 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
-#include "ble_central.h"
-#include "wifi_manager.h"
-#include "mqtt_client.h"
+#include "ble/ble_central.h"
+#include "net/wifi_manager.h"
+#include "net/mqtt_client.h"
 
 // 브로커 주소 — 라즈베리파이 (같은 네트워크)
 static const char* MQTT_BROKER = "192.168.0.7";
