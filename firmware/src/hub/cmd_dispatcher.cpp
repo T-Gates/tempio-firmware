@@ -30,6 +30,12 @@ void dispatch_command(const MqttCommand& cmd) {
             if (!timings.isNull() && timings.size() > 0) {
                 uint16_t count = timings.size();
                 size_t pktLen = 1 + 2 + count * 2;
+                // BLE MTU 512 제한
+                if (pktLen > 500) {
+                    Serial.printf("<< IR_TIMING → %s : too large (%u bytes)\n",
+                                  cmd.target, pktLen);
+                    return;
+                }
                 uint8_t* pkt = (uint8_t*)malloc(pktLen);
                 if (pkt) {
                     pkt[0] = static_cast<uint8_t>(MsgType::IR_TIMING);

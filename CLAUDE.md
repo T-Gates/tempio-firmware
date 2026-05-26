@@ -18,7 +18,7 @@ tempio/
 │   │   │   │   └── protocol.h      <- (lib/protocol/ 참조)
 │   │   │   └── net/
 │   │   │       ├── wifi_manager.h/.cpp <- WiFi + NVS + 시리얼 설정
-│   │   │       └── mqtt_client.h/.cpp  <- MQTT WSS (ESP-IDF esp_mqtt)
+│   │   │       └── mqtt_handler.h/.cpp  <- MQTT WSS (ESP-IDF esp_mqtt)
 │   │   ├── sensor/     <- 센서노드 (ESP32-C3, BLE Peripheral)
 │   │   └── ir/         <- IR노드 (ESP32-C3, BLE Peripheral)
 │   └── lib/

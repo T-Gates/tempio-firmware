@@ -41,7 +41,7 @@ static char topicCommands[48]; // tempio/{hub_id}/commands
 
 // ──────────── ESP-IDF MQTT 핸들 ────────────
 static esp_mqtt_client_handle_t client = nullptr;
-static bool connected = false;
+static volatile bool connected = false;
 
 // ──────────── 명령 큐 (원형 버퍼) ────────────
 static MqttCommand cmdQueue[CMD_QUEUE_MAX];
@@ -117,7 +117,8 @@ static void mqttEventHandler(void* arg, esp_event_base_t base, int32_t event_id,
 
         case MQTT_EVENT_DATA:
             // topic 매칭 확인 후 명령 파싱
-            if (event->topic_len > 0 && event->data_len > 0) {
+            if (event->topic_len > 0 && event->data_len > 0
+                && event->data_len == event->total_data_len) {
                 parseCommands(event->data, event->data_len);
             }
             break;

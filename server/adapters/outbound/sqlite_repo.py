@@ -17,7 +17,6 @@ class SqliteRepository(SensorRepository):
     def _conn(self):
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
         try:
             yield conn
             conn.commit()
@@ -29,6 +28,7 @@ class SqliteRepository(SensorRepository):
 
     def _init_tables(self):
         with self._conn() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS hub_reports (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +68,7 @@ class SqliteRepository(SensorRepository):
                  report.co2, report.hub_temperature, report.hub_humidity, devices_json, ts),
             )
 
-    def save_sensor_reading(self, hub_id: str, reading: SensorReading, timestamp: datetime) -> None:
+    def save_sensor_reading(self, hub_id: str, reading: SensorReading, timestamp: Optional[datetime]) -> None:
         ts = timestamp.isoformat() if timestamp else datetime.now().isoformat()
         with self._conn() as conn:
             conn.execute(
