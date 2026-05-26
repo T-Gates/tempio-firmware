@@ -8,3 +8,15 @@
 
 // 메인 루프 주기 (ms)
 #define LOOP_DELAY_MS    100
+
+// BLE
+#define MAX_NODES         5
+#define PENDING_MAX       8
+#define REPORT_QUEUE_MAX  8
+
+// MQTT
+#define CMD_QUEUE_MAX     8
+
+// BLE Scan
+#define BLE_SCAN_INTERVAL 100
+#define BLE_SCAN_WINDOW   99

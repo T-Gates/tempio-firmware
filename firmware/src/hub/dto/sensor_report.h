@@ -2,7 +2,6 @@
 #pragma once
 #include <stdint.h>
 #include <ArduinoJson.h>
-#include <WiFi.h>
 
 struct SensorReport {
     char node_id[18];       // MAC 주소 "aa:bb:cc:dd:ee:ff"
@@ -13,12 +12,17 @@ struct SensorReport {
     uint16_t battery_mv;
     int8_t ble_rssi;
 
-    // 허브 상태 포함해서 MQTT publish용 JSON 생성
+    // 허브 상태 — main.cpp에서 직렬화 전에 주입
+    int16_t wifi_rssi;
+    uint32_t free_heap;
+    uint32_t uptime_ms;
+
+    // MQTT publish용 JSON 생성
     int toJson(char* buf, size_t bufSize) const {
         JsonDocument doc;
-        doc["wifi_rssi"] = WiFi.RSSI();
-        doc["free_heap"] = ESP.getFreeHeap();
-        doc["uptime_ms"] = millis();
+        doc["wifi_rssi"] = wifi_rssi;
+        doc["free_heap"] = free_heap;
+        doc["uptime_ms"] = uptime_ms;
 
         JsonArray devices = doc["connected_devices"].to<JsonArray>();
         JsonObject dev = devices.add<JsonObject>();

@@ -16,25 +16,28 @@ router = APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, service: SensorService = Depends(get_service)):
+    hub = service.get_latest_hub()
+    sensors = service.get_latest_sensors()
+    history = service.get_sensor_history(30)
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         context={
-            "hub": service.get_latest_hub(),
-            "sensors": service.get_latest_sensors(),
-            "sensor_history": service.get_sensor_history(30),
+            "hub": hub,
+            "sensors": sensors,
+            "sensor_history": [r.model_dump() for r in history],
         },
     )
 
 
 @router.get("/api/hub-history")
 def hub_history(service: SensorService = Depends(get_service)):
-    return service.get_hub_history()
+    return [r.model_dump() for r in service.get_hub_history()]
 
 
 @router.get("/api/sensor-history")
 def sensor_history(service: SensorService = Depends(get_service)):
-    return service.get_sensor_history()
+    return [r.model_dump() for r in service.get_sensor_history()]
 
 
 @router.post("/api/hub/{hub_id}/command", dependencies=[Depends(get_api_key_verifier)])

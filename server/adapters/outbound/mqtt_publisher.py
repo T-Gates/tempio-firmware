@@ -2,6 +2,7 @@ import json
 
 import aiomqtt
 
+from constants import MQTT_TOPIC_COMMANDS_TEMPLATE
 from domain.models import CommandEnvelope
 from ports.message_broker import CommandPublisher
 
@@ -27,7 +28,7 @@ class MqttPublisher(CommandPublisher):
     async def publish_commands(self, envelope: CommandEnvelope) -> None:
         if not self._client:
             raise RuntimeError("MQTT publisher not connected")
-        topic = f"tempio/{envelope.hub_id}/commands"
+        topic = MQTT_TOPIC_COMMANDS_TEMPLATE.format(hub_id=envelope.hub_id)
         payload = json.dumps(
             {"commands": [cmd.model_dump() for cmd in envelope.commands]}
         )

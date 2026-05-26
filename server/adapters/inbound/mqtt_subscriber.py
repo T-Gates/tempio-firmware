@@ -1,11 +1,14 @@
 import asyncio
 import json
-from datetime import datetime
+import logging
 from typing import Callable
 
 import aiomqtt
 
+from constants import MQTT_TOPIC_REPORT_PATTERN
 from domain.models import HubReport
+
+logger = logging.getLogger(__name__)
 
 
 class MqttSubscriber:
@@ -26,7 +29,8 @@ class MqttSubscriber:
                 async with aiomqtt.Client(
                     self.broker_host, self.broker_port
                 ) as client:
-                    await client.subscribe("tempio/+/report")
+                    await client.subscribe(MQTT_TOPIC_REPORT_PATTERN)
+                    logger.info("mqtt connected, subscribed to %s", MQTT_TOPIC_REPORT_PATTERN)
                     async for message in client.messages:
                         try:
                             parts = str(message.topic).split("/")
@@ -37,25 +41,14 @@ class MqttSubscriber:
                             data: dict = json.loads(
                                 message.payload.decode()
                             )
-                            report = HubReport(
-                                hub_id=hub_id,
-                                timestamp=datetime.now(),
-                                **{
-                                    k: v
-                                    for k, v in data.items()
-                                    if k in HubReport.model_fields
-                                    and k not in ("hub_id", "timestamp")
-                                },
-                            )
+                            report = HubReport.from_mqtt_payload(hub_id, data)
 
                             if self._callback:
                                 await asyncio.to_thread(
                                     self._callback, report
                                 )
                         except Exception as e:
-                            print(f"mqtt parse error: {e}")
+                            logger.error("mqtt parse error: %s", e)
             except aiomqtt.MqttError as e:
-                print(
-                    f"mqtt connection lost: {e}, reconnecting in 5s..."
-                )
+                logger.warning("mqtt connection lost: %s, reconnecting in 5s...", e)
                 await asyncio.sleep(5)

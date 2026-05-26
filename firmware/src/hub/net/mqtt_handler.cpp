@@ -3,7 +3,8 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <mqtt_client.h>
-#include "mqtt_client.h"
+#include "mqtt_handler.h"
+#include "../config.h"
 
 // GTS Root R4 (Google Trust Services) — Cloudflare 인증서 체인의 루트 CA
 // Cloudflare가 CA를 변경하면 이 인증서도 교체 필요
@@ -43,11 +44,13 @@ static esp_mqtt_client_handle_t client = nullptr;
 static bool connected = false;
 
 // ──────────── 명령 큐 (원형 버퍼) ────────────
-static constexpr int CMD_QUEUE_MAX = 8;
 static MqttCommand cmdQueue[CMD_QUEUE_MAX];
 static volatile int cmdHead = 0;
 static volatile int cmdTail = 0;
 static volatile int cmdCount = 0;
+
+// MQTT 이벤트 핸들러는 esp_mqtt 내부 태스크에서, mqtt_get_command는 Arduino loop 태스크에서 호출 — 크로스 태스크 보호 필요
+static portMUX_TYPE cmdMux = portMUX_INITIALIZER_UNLOCKED;
 
 static void buildHubId() {
     String mac = WiFi.macAddress();
@@ -62,8 +65,6 @@ static void buildHubId() {
 
 // 수신 메시지에서 commands 배열 파싱 → 큐에 적재
 static void parseCommands(const char* data, int len) {
-    if (cmdCount >= CMD_QUEUE_MAX) return;
-
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, data, len);
     if (err) {
@@ -75,7 +76,11 @@ static void parseCommands(const char* data, int len) {
     if (commands.isNull()) return;
 
     for (JsonObject obj : commands) {
-        if (cmdCount >= CMD_QUEUE_MAX) break;
+        portENTER_CRITICAL(&cmdMux);
+        if (cmdCount >= CMD_QUEUE_MAX) {
+            portEXIT_CRITICAL(&cmdMux);
+            break;
+        }
 
         MqttCommand& cmd = cmdQueue[cmdTail];
         strlcpy(cmd.target, obj["target"] | "", sizeof(cmd.target));
@@ -89,6 +94,7 @@ static void parseCommands(const char* data, int len) {
 
         cmdTail = (cmdTail + 1) % CMD_QUEUE_MAX;
         cmdCount++;
+        portEXIT_CRITICAL(&cmdMux);
     }
 }
 
@@ -184,10 +190,15 @@ bool mqtt_has_command() {
 }
 
 bool mqtt_get_command(MqttCommand* cmd) {
-    if (cmdCount <= 0) return false;
+    portENTER_CRITICAL(&cmdMux);
+    if (cmdCount <= 0) {
+        portEXIT_CRITICAL(&cmdMux);
+        return false;
+    }
 
     *cmd = cmdQueue[cmdHead];
     cmdHead = (cmdHead + 1) % CMD_QUEUE_MAX;
     cmdCount--;
+    portEXIT_CRITICAL(&cmdMux);
     return true;
 }

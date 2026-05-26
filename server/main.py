@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +10,8 @@ from adapters.outbound.sqlite_repo import SqliteRepository
 from adapters.outbound.mqtt_publisher import MqttPublisher
 from adapters.inbound.mqtt_subscriber import MqttSubscriber
 from adapters.inbound.http_routes import router
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -30,13 +33,13 @@ async def lifespan(app: FastAPI):
             await publisher.connect()
             break
         except Exception as e:
-            print(f"MQTT connect attempt {attempt + 1}/10 failed: {e}")
+            logger.warning("MQTT connect attempt %d/10 failed: %s", attempt + 1, e)
             await asyncio.sleep(2)
     else:
         raise RuntimeError("Failed to connect to MQTT broker after 10 attempts")
 
     sub_task = asyncio.create_task(subscriber.run())
-    print(f"MQTT connected: {settings.mqtt_broker_host}:{settings.mqtt_broker_port}")
+    logger.info("MQTT connected: %s:%d", settings.mqtt_broker_host, settings.mqtt_broker_port)
     yield
     sub_task.cancel()
     try:
