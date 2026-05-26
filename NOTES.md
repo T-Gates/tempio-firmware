@@ -1,63 +1,63 @@
-# 학습 노트 — 빵판 실습
+# 개발 노트
 
-개념별 정리. 새 개념 배울 때마다 추가.
-
----
-
-## 택트 스위치 (tact switch)
-
-작은 푸시버튼. 누르는 동안만 ON (momentary).
-
-### 생김새
-- 6×6mm 검은 플라스틱 몸통, 윗면에 누름 버튼
-- 다리 4개지만 **단자는 2개** — 같은 쪽 2핀은 내부에서 항상 연결됨
-- 안전하게 쓰려면 **대각선 핀** 2개 사용 (같은 쪽 쌍은 항상 연결돼 있어 NG)
-
-### 작동 원리
-- 내부에 **금속 돔(metal dome)** — 스프링 + 전기 다리 역할 동시에
-- 안 누름: 돔 가장자리만 바깥 접점에 닿음, 가운데는 떠 있음 → **OPEN(끊김)**
-- 누름: 플런저가 돔 가운데를 누름 → "딸깍" 휘어짐 → 가운데 접점에 닿아 두 단자 연결 → **CLOSED(연결)**
-- 뗌: 돔이 스프링처럼 복귀 → OPEN
-- "딸깍" 촉감 = 돔이 휘는 순간 = tactile(택트)
-
-### 바운스
-- 돔이 닿을 때 한 번에 안 닿고 수 ms 동안 떨림(chatter) → 디바운싱 필요
-
-### 빵판 연결
-- 가운데 홈에 걸쳐서 꽂기
-- 한 핀 → GPIO, 대각선 핀 → GND
+실기에서 터진 것들 정리. 다음에 또 터질 때 여기 먼저 확인.
 
 ---
 
-## 풀업 / 풀다운 (pull-up / pull-down)
+## NimBLE 2.5.0 지뢰밭
 
-입력 핀에 **기본값을 정해주는 약한 저항**.
+### 1. deleteClient — 콜백 안에서 부르면 heap 크래시
 
-### 왜 필요한가 — 플로팅 핀
-- 핀이 아무 데도 연결 안 되면 값이 랜덤으로 튐 (floating)
-- = 초기화 안 한 변수가 쓰레기 값 읽는 것과 같음
-- → 기본값을 줘야 함
+- **증상**: `onDisconnect` 콜백 안에서 `NimBLEDevice::deleteClient(client)` 호출 → heap 크래시 (재부팅 루프)
+- **원인**: NimBLE 콜백은 BLE 태스크 컨텍스트에서 실행됨. 그 안에서 클라이언트 메모리를 해제하면 아직 참조 중인 포인터를 밟음
+- **해결**: `cleanupDisconnected()`처럼 **메인 루프(`loop()`)에서** deleteClient 호출. 콜백에서는 `used = false` 플래그만 세팅
 
-### 풀업 (pull-up)
-- 핀 ↔ 3.3V 사이에 저항 (보통 10kΩ)
-- 아무 신호 없을 때 핀을 **기본값 HIGH로 약하게 묶음**
-- 버튼이 GND로 강하게 당기면 → 풀업이 져줌 → LOW
+### 2. 클라이언트 풀 누수 — createClient가 nullptr 반환
 
-### 풀다운 (pull-down)
-- 핀 ↔ GND 사이에 저항
-- 기본값 **LOW**로 묶음 (풀업의 반대)
+- **증상**: 한참 잘 되다가 갑자기 `createClient failed` 무한 반복. active=0인데도 생성 불가
+- **원인**: disconnect 후 클라이언트 포인터만 nullptr로 밀고 `deleteClient()`를 안 부르면, NimBLE 내부 리스트에 죽은 클라이언트가 쌓임. MAX_CONNECTIONS(5)에 도달하면 끝
+- **해결**: `cleanupDisconnected()`에서 `NimBLEDevice::deleteClient(client)` 호출 후 nullptr
 
-### 핵심: "약하다"
-- 약하게 묶기 때문에, 진짜 신호가 오면 양보하고 신호 없을 땐 기본값 유지
-- 저항인 이유: 강하게 직결하면 핀이 못박히고, 버튼 누를 때 합선(short) 발생
+### 3. NimBLEAddress 생성자 — v2.5.0에서 변경됨
 
-### 내부 vs 외부
-- 외부: 빵판에 진짜 저항을 꽂음
-- 내부: ESP32 칩 안에 풀업 저항 내장 → `pinMode(핀, INPUT_PULLUP)` 한 줄로 켬
-- 그래서 버튼 회로에 물리 저항 없이도 동작함
+- **증상**: `NimBLEAddress(string)` 컴파일 에러
+- **원인**: v1.x는 `NimBLEAddress(std::string)`, v2.5.0은 `NimBLEAddress(std::string, uint8_t type)` — type 파라미터 필수
+- **해결**: `NimBLEAddress(addrStr, 0)` 으로 호출 (0 = public address)
 
-### 코드
+### 4. toString() 댕글링 포인터
+
+- **증상**: 시리얼 출력에 깨진 문자열, 간헐적 크래시
+- **원인**: `addr.toString().c_str()` → toString()이 임시 std::string 반환 → 그 줄(;) 끝에서 소멸 → c_str()이 시체 주소를 가리킴
+- **해결**: string 자체를 변수에 담아야 포인터가 유효
 ```cpp
-pinMode(BUTTON, INPUT_PULLUP);  // 내부 풀업 ON → 기본값 HIGH
-// 안 누름 = HIGH, 누름 = LOW
+// ❌ 댕글링
+const char* s = addr.toString().c_str();
+// ✅ 안전
+std::string s = addr.toString();
+const char* p = s.c_str();
 ```
+
+### 5. getClientListSize — v2.5.0에 없음
+
+- **증상**: `getClientListSize is not a member of NimBLEDevice` 컴파일 에러
+- **원인**: v2.5.0에서 API 이름 변경/제거
+- **해결**: 직접 만든 `activeCount()` 같은 헬퍼로 대체
+
+---
+
+## ESP32 칩별 GPIO 주의
+
+| 칩 | 플래시 전용 (건들면 크래시) | 내장 LED | LED 극성 |
+|----|--------------------------|---------|---------|
+| ESP32 오리지널 | GPIO 6~11 | GPIO2 | active-high |
+| ESP32-C3 | GPIO 12~17 | GPIO8 | active-low |
+| ESP32-S3 | GPIO 26~32 | 보드마다 다름 | 보드마다 다름 |
+
+보드 바꿀 때 LED 핀 + 금지 GPIO 반드시 확인.
+
+---
+
+## BLE 디버깅 팁
+
+- `createClient` 직전에 `activeCount()`, `CONFIG_BT_NIMBLE_MAX_CONNECTIONS`, `CONFIG_BT_NIMBLE_ROLE_CENTRAL` 출력해두면 원인 파악이 빠름
+- disconnect reason: `reason - 512` = BLE HCI 표준 에러코드 (19=상대가 끊음, 8=타임아웃, 9=감시 타임아웃)
