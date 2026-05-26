@@ -1,3 +1,4 @@
+// WiFi 매니저 — NVS 크레덴셜 저장/로드 + 자동 재연결
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Preferences.h>
@@ -7,15 +8,17 @@ static Preferences prefs;
 static String ssid;
 static String password;
 
+// NVS "wifi" 네임스페이스에서 SSID/PW 읽기
 static void load_credentials() {
-    prefs.begin("wifi", true);
+    prefs.begin("wifi", true); // read-only
     ssid = prefs.getString("ssid", "");
     password = prefs.getString("pw", "");
     prefs.end();
 }
 
+// NVS에 새 크레덴셜 저장 후 메모리에도 반영
 static void save_credentials(const String& newSsid, const String& newPw) {
-    prefs.begin("wifi", false);
+    prefs.begin("wifi", false); // read-write
     prefs.putString("ssid", newSsid);
     prefs.putString("pw", newPw);
     prefs.end();
@@ -23,13 +26,14 @@ static void save_credentials(const String& newSsid, const String& newPw) {
     password = newPw;
 }
 
+// STA 모드로 연결 시도, 최대 10초 대기
 static void connect_wifi() {
     Serial.printf("WiFi connecting to: %s\n", ssid.c_str());
     WiFi.mode(WIFI_STA);
-    WiFi.setAutoReconnect(true);
+    WiFi.setAutoReconnect(true); // 끊기면 ESP32가 자동 재연결 시도
     WiFi.begin(ssid.c_str(), password.c_str());
 
-    int attempts = 20; // 20 * 500ms = 10s
+    int attempts = 20; // 20 * 500ms = 10초 타임아웃
     while (WiFi.status() != WL_CONNECTED && attempts-- > 0) {
         delay(500);
         Serial.print(".");
@@ -43,6 +47,7 @@ static void connect_wifi() {
     }
 }
 
+// 부팅 시 NVS에서 크레덴셜 로드 → 있으면 자동 연결
 void wifi_init() {
     load_credentials();
     if (ssid.length() == 0) {
@@ -56,6 +61,9 @@ bool wifi_is_connected() {
     return WiFi.status() == WL_CONNECTED;
 }
 
+// 시리얼 명령 파서 — loop()에서 매 틱 호출
+// "wifi set SSID PW" → 크레덴셜 저장 + 즉시 연결
+// "wifi status" → 현재 연결 상태 출력
 void wifi_process_serial() {
     if (!Serial.available()) return;
 

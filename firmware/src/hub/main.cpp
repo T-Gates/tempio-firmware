@@ -1,12 +1,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include "config.h"
 #include "ble/ble_central.h"
 #include "net/wifi_manager.h"
 #include "net/mqtt_client.h"
-
-// 브로커 주소 — 라즈베리파이 (같은 네트워크)
-static const char* MQTT_BROKER = "192.168.0.7";
 
 void setup() {
     delay(3000);
@@ -15,7 +13,7 @@ void setup() {
 
     wifi_init();
     ble_central_init();
-    mqtt_init(MQTT_BROKER);
+    mqtt_init(MQTT_BROKER_IP, MQTT_BROKER_PORT);
 }
 
 void loop() {
@@ -55,5 +53,5 @@ void loop() {
         Serial.printf(">> MQTT published: %s\n", report.node_id);
     }
 
-    delay(100);
+    delay(LOOP_DELAY_MS);
 }
