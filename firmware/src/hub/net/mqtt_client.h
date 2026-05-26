@@ -1,3 +1,4 @@
+// MQTT 클라이언트 — WebSocket 기반, ESP-IDF esp_mqtt 사용
 #pragma once
 #include <stdint.h>
 
@@ -7,7 +8,8 @@ struct MqttCommand {
     char payload[256];  // JSON payload 문자열
 };
 
-void mqtt_init(const char* broker_ip, uint16_t port = 1883);
+// broker_uri: "ws://host:port/mqtt" 또는 "wss://host/mqtt"
+void mqtt_init(const char* broker_uri);
 void mqtt_loop();
 bool mqtt_is_connected();
 bool mqtt_publish_report(const char* json);

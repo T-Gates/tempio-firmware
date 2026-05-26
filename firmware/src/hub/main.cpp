@@ -13,7 +13,7 @@ void setup() {
 
     wifi_init();
     ble_central_init();
-    mqtt_init(MQTT_BROKER_IP, MQTT_BROKER_PORT);
+    mqtt_init(MQTT_BROKER_URI);
 }
 
 void loop() {
