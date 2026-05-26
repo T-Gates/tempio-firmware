@@ -8,21 +8,23 @@ from domain.services import SensorService
 from adapters.outbound.sqlite_repo import SqliteRepository
 from adapters.outbound.mqtt_publisher import MqttPublisher
 from adapters.inbound.mqtt_subscriber import MqttSubscriber
-from adapters.inbound.http_routes import create_router
-
-settings = Settings()
-
-repo = SqliteRepository(settings.db_path)
-publisher = MqttPublisher(settings.mqtt_broker_host, settings.mqtt_broker_port)
-subscriber = MqttSubscriber(settings.mqtt_broker_host, settings.mqtt_broker_port)
-
-service = SensorService(repo=repo, publisher=publisher)
-
-subscriber.on_report(service.process_report)
+from adapters.inbound.http_routes import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings = Settings()
+
+    repo = SqliteRepository(settings.db_path)
+    publisher = MqttPublisher(settings.mqtt_broker_host, settings.mqtt_broker_port)
+    subscriber = MqttSubscriber(settings.mqtt_broker_host, settings.mqtt_broker_port)
+    service = SensorService(repo=repo, publisher=publisher)
+
+    subscriber.on_report(service.process_report)
+
+    app.state.service = service
+    app.state.api_key = settings.api_key or None
+
     for attempt in range(10):
         try:
             await publisher.connect()
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(2)
     else:
         raise RuntimeError("Failed to connect to MQTT broker after 10 attempts")
+
     sub_task = asyncio.create_task(subscriber.run())
     print(f"MQTT connected: {settings.mqtt_broker_host}:{settings.mqtt_broker_port}")
     yield
@@ -44,4 +47,4 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Tempio API", lifespan=lifespan)
-app.include_router(create_router(service, settings.api_key or None))
+app.include_router(router)
