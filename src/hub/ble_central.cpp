@@ -259,6 +259,10 @@ static bool connectToNode(const NimBLEAddress& addr) {
     }
 
     // 1) BLE 클라이언트 생성 — NimBLE 내부 풀에서 하나 꺼내옴
+    Serial.printf("[DEBUG] clients=%d  max=%d  central=%d\n",
+                  NimBLEDevice::getClientListSize(),
+                  CONFIG_BT_NIMBLE_MAX_CONNECTIONS,
+                  CONFIG_BT_NIMBLE_ROLE_CENTRAL);
     auto* client = NimBLEDevice::createClient();
     if (!client) {
         Serial.println("createClient failed");

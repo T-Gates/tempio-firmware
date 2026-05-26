@@ -10,7 +10,7 @@ ESP32-C3 2대로 BLE Central↔Peripheral 연결 확인. 하드웨어 센서 없
 
 - [x] Peripheral: 광고(advertise) + 서비스/특성 등록 + mock 센서 데이터 전송
 - [x] Central: 스캔 → 연결 → 데이터 읽기 → 시리얼 출력
-- [x] 양방향 확인: Central→Peripheral 명령 전달 (ASSIGN_ID)
+- [x] 양방향 확인: Central→Peripheral 명령 전달 (HUB_READY + CONFIG)
 
 검증: 시리얼 모니터 2개 열어서 양쪽 로그 확인 ✅
 
@@ -24,7 +24,7 @@ ESP32-C3 2대로 BLE Central↔Peripheral 연결 확인. 하드웨어 센서 없
 - [x] NVS에 sleep_interval 저장 (딥슬립 후에도 유지) — NodeState 클래스
 - [ ] 전류 측정 (멀티미터로 슬립 중 전류 확인)
 
-검증: 코드 구현 완료, 실기 플래시 테스트 미완
+검증: 단일 노드 연결·데이터 수신·disconnect·재스캔 정상 동작 확인 ✅ (전류 측정 미완)
 
 ## Phase 3 — 다중 노드 연결
 
@@ -122,5 +122,5 @@ IR노드(ESP32-C3) BLE Peripheral + IR 발사.
 ### 필요
 - [ ] ESP32-S3 보드 — Phase 4 (허브용)
 - [ ] SHT40 센서 — Phase 8 이후 교체 (센서노드용)
-- [ ] SCD40 센서 — Phase 5 (허브 CO2용)
+- [ ] SCD40 센서 — Phase 6 (허브 CO2용)
 - [ ] LDR + 10k 저항 — Phase 8 (센서노드 조도)
