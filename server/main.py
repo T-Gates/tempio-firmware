@@ -23,7 +23,15 @@ subscriber.on_report(service.process_report)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await publisher.connect()
+    for attempt in range(10):
+        try:
+            await publisher.connect()
+            break
+        except Exception as e:
+            print(f"MQTT connect attempt {attempt + 1}/10 failed: {e}")
+            await asyncio.sleep(2)
+    else:
+        raise RuntimeError("Failed to connect to MQTT broker after 10 attempts")
     sub_task = asyncio.create_task(subscriber.run())
     print(f"MQTT connected: {settings.mqtt_broker_host}:{settings.mqtt_broker_port}")
     yield

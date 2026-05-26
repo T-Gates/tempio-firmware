@@ -25,12 +25,15 @@ def create_router(service: SensorService, api_key: str = None) -> APIRouter:
         latest_hub = service.get_latest_hub()
         latest_sensors = service.get_latest_sensors()
         sensor_history = service.get_sensor_history(30)
-        return templates.TemplateResponse("dashboard.html", {
-            "request": request,
-            "hub": latest_hub,
-            "sensors": latest_sensors,
-            "sensor_history": sensor_history,
-        })
+        return templates.TemplateResponse(
+            request,
+            "dashboard.html",
+            context={
+                "hub": latest_hub,
+                "sensors": latest_sensors,
+                "sensor_history": sensor_history,
+            },
+        )
 
     @router.get("/api/hub-history")
     def hub_history():
