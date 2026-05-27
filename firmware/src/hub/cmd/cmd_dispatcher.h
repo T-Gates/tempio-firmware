@@ -5,7 +5,7 @@
 //   2. 연결 안 되어 있으면 → 해당 노드의 펜딩 큐에 보관 (FIFO)
 //   3. 나중에 노드가 연결되면 → flush_node_pending()으로 밀어냄
 #pragma once
-#include "net/mqtt_handler.h"
+#include "../net/mqtt_handler.h"
 
 // 명령 수신 시 호출. 연결된 노드면 즉시 전송, 아니면 펜딩 큐에 보관.
 // esp_mqtt 태스크에서 호출될 수 있으므로 내부적으로 portMUX 보호.

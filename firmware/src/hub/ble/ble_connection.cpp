@@ -3,6 +3,7 @@
 #include "ble_internal.h"
 #include "ble_connection.h"
 #include "ble_data.h"
+#include "../cmd/cmd_dispatcher.h"
 
 // ──────────── 연결 대기 큐 ────────────
 static NimBLEAddress pendingAddrs[PENDING_MAX];
@@ -103,6 +104,9 @@ static void registerNode(int slot, NimBLEClient* client,
     }
     Serial.printf("<< HUB_READY → %s\n", addr.toString().c_str());
     digitalWrite(LED_PIN, LED_ON);
+
+    // 이 노드에 대기 중인 서버 명령이 있으면 지금 전송
+    flush_node_pending(addr.toString().c_str());
 }
 
 static bool connectToNode(const NimBLEAddress& addr) {

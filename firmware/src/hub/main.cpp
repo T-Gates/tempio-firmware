@@ -4,7 +4,7 @@
 #include "ble/ble_central.h"
 #include "net/wifi_manager.h"
 #include "net/mqtt_handler.h"
-#include "cmd_dispatcher.h"
+#include "cmd/cmd_dispatcher.h"
 
 void setup() {
     delay(3000);
@@ -33,10 +33,8 @@ void loop() {
         Serial.printf(">> MQTT published: %s\n", report.node_id);
     }
 
-    MqttCommand cmd;
-    while (mqtt_get_command(&cmd)) {
-        dispatch_command(cmd);
-    }
+    // 연결된 노드 중 펜딩 명령이 있으면 전송 시도
+    flush_all_pending();
 
     delay(LOOP_DELAY_MS);
 }

@@ -2,8 +2,8 @@
 #include <ArduinoJson.h>
 #include "hub_command.h"
 #include "cmd_dispatcher.h"
-#include "ble/ble_central.h"
-#include "net/mqtt_handler.h"
+#include "../ble/ble_central.h"
+#include "../net/mqtt_handler.h"
 
 static void handleHubStatus() {
     char json[256];

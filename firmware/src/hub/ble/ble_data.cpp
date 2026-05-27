@@ -3,14 +3,10 @@
 #include <cstring>
 #include "ble_internal.h"
 #include "ble_data.h"
+#include "../util/thread_safe_queue.h"
 
-// ──────────── 센서 리포트 링 버퍼 ────────────
-// onDataNotify(NimBLE 태스크)와 ble_get_pending_report(Arduino loop 태스크)가 동시 접근
-static SensorReport reportQueue[REPORT_QUEUE_MAX];
-static volatile int reportHead = 0;
-static volatile int reportTail = 0;
-static volatile int reportCount = 0;
-static portMUX_TYPE reportMux = portMUX_INITIALIZER_UNLOCKED;
+// onDataNotify(NimBLE 태스크) → push, ble_get_pending_report(Arduino loop) → pop
+static ThreadSafeQueue<SensorReport, REPORT_QUEUE_MAX> reportQueue;
 
 static int resolveSourceSlot(NimBLERemoteCharacteristic* c) {
     auto* svc = c->getRemoteService();
@@ -44,13 +40,7 @@ static SensorReport buildReport(int slot, const SensorData& sd, const char* srcA
 }
 
 static void enqueueReport(const SensorReport& rpt) {
-    portENTER_CRITICAL(&reportMux);
-    if (reportCount < REPORT_QUEUE_MAX) {
-        reportQueue[reportTail] = rpt;
-        reportTail = (reportTail + 1) % REPORT_QUEUE_MAX;
-        reportCount++;
-    }
-    portEXIT_CRITICAL(&reportMux);
+    reportQueue.push(rpt);
 }
 
 static void handleSensorData(int slot, const uint8_t* data, size_t len, const char* srcAddr) {
@@ -85,14 +75,5 @@ void onDataNotify(NimBLERemoteCharacteristic* c,
 }
 
 bool ble_get_pending_report(SensorReport* out) {
-    portENTER_CRITICAL(&reportMux);
-    if (reportCount <= 0) {
-        portEXIT_CRITICAL(&reportMux);
-        return false;
-    }
-    *out = reportQueue[reportHead];
-    reportHead = (reportHead + 1) % REPORT_QUEUE_MAX;
-    reportCount--;
-    portEXIT_CRITICAL(&reportMux);
-    return true;
+    return reportQueue.pop(out);
 }

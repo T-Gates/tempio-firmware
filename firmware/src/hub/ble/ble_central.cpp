@@ -96,6 +96,7 @@ void ble_central_loop() {
         doScan = false;
         NimBLEDevice::getScan()->start(0, false);
     }
+    // 한번에 하나씩. 너무 많이 처리하면 루프가 길어져서 다른 작업이 밀릴 수 있음.
     processNextPending();
     printStatus();
 }

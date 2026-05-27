@@ -11,14 +11,19 @@ tempio/
 │   │   ├── hub/        <- 허브 (ESP32, WiFi+BLE Central)
 │   │   │   ├── config.h           <- 설정값 (MQTT 브로커 URI, 루프 주기)
 │   │   │   ├── main.cpp           <- 오케스트레이터
+│   │   │   ├── cmd/
+│   │   │   │   ├── cmd_dispatcher.h/.cpp <- 명령 라우팅 + BLE 패킷 전송
+│   │   │   │   └── hub_command.h/.cpp    <- 허브 자체 명령 (HUB_STATUS 등)
 │   │   │   ├── dto/
 │   │   │   │   └── sensor_report.h <- BLE·MQTT·main 간 공유 DTO
 │   │   │   ├── ble/
 │   │   │   │   ├── ble_central.h/.cpp <- BLE Central (스캔·연결·수신)
 │   │   │   │   └── protocol.h      <- (lib/protocol/ 참조)
-│   │   │   └── net/
-│   │   │       ├── wifi_manager.h/.cpp <- WiFi + NVS + 시리얼 설정
-│   │   │       └── mqtt_handler.h/.cpp  <- MQTT WSS (ESP-IDF esp_mqtt)
+│   │   │   ├── net/
+│   │   │   │   ├── wifi_manager.h/.cpp <- WiFi + NVS + 시리얼 설정
+│   │   │   │   └── mqtt_handler.h/.cpp  <- MQTT WSS (ESP-IDF esp_mqtt)
+│   │   │   └── util/
+│   │   │       └── pending_pool.h  <- 노드별 펜딩 큐 (TTL 기반 만료)
 │   │   ├── sensor/     <- 센서노드 (ESP32-C3, BLE Peripheral)
 │   │   └── ir/         <- IR노드 (ESP32-C3, BLE Peripheral)
 │   └── lib/

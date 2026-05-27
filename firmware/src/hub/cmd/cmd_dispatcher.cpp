@@ -6,10 +6,10 @@
 #include <ArduinoJson.h>
 #include <protocol.h>
 #include "cmd_dispatcher.h"
-#include "ble/ble_central.h"
-#include "config.h"
+#include "../ble/ble_central.h"
+#include "../config.h"
 #include "hub_command.h"
-#include "util/pending_pool.h"
+#include "../util/pending_pool.h"
 
 static PendingPool pool;
 
