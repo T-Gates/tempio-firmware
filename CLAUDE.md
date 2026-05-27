@@ -63,7 +63,7 @@ tempio/
 ## 빌드/실행
 
 ### 펌웨어
-PlatformIO 프로젝트 루트: `firmware/`
+PlatformIO 프로젝트 루트: `firmware/`, **C++17** (`-std=gnu++17`, platformio.ini `[common]`에 설정)
 ```bash
 cd firmware
 pio run -e hub    -t upload   # 허브 플래시
