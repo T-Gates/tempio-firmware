@@ -102,6 +102,8 @@ static void parseCommands(const char* data, int len) {
         strlcpy(cmd.target, obj["target"] | "", sizeof(cmd.target));
         strlcpy(cmd.type, obj["type"] | "", sizeof(cmd.type));
 
+        cmd.cmd_id = obj["cmd_id"] | 0;
+
         if (obj["payload"].is<JsonObject>()) {
             serializeJson(obj["payload"], cmd.payload, sizeof(cmd.payload));
         } else {

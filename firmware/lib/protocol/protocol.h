@@ -72,8 +72,9 @@ struct NodeInfo {
 //
 // 바이트 레이아웃:
 //   [0]      MsgType::IR_TIMING (0x02)
-//   [1..2]   uint16_t count     타이밍 배열 원소 개수 (little-endian)
-//   [3..]    uint16_t[]         mark/space 교대 값 (마이크로초 단위)
+//   [1..2]   uint16_t cmd_id    서버 명령 ID (ACK에서 에코)
+//   [3..4]   uint16_t count     타이밍 배열 원소 개수 (little-endian)
+//   [5..]    uint16_t[]         mark/space 교대 값 (마이크로초 단위)
 //                               짝수 인덱스 = mark(IR ON), 홀수 = space(IR OFF)
 //
 // 예: 삼성 에어컨 냉방 26도 → count=199, 총 401바이트
@@ -81,13 +82,13 @@ struct NodeInfo {
 // BLE MTU 기본 20바이트로는 부족.
 // MTU 협상(최대 512)으로 해결하거나, 안 되면 패킷 분할 전송 구현 필요.
 
-// 노드 → 허브: 명령 실행 결과 (3바이트)
+// 노드 → 허브: 명령 실행 결과 (4바이트)
 // 노드가 서버 명령(SET_INTERVAL 등)을 받아 실행한 뒤 결과를 회신.
 // 허브는 이걸 서버에 MQTT로 전달해서 명령 도달 여부를 확인.
 struct CmdAck {
-    MsgType type = MsgType::CMD_ACK;
-    MsgType cmd_type;  // 어떤 명령에 대한 ACK인지 (예: SET_INTERVAL)
-    uint8_t success;   // 1=성공, 0=실패
+    MsgType  type = MsgType::CMD_ACK;
+    uint16_t cmd_id;   // 서버가 부여한 명령 ID (에코)
+    uint8_t  success;  // 1=성공, 0=실패
 } __attribute__((packed));
 
 // ──────────── 설정 명령 ────────────
@@ -99,17 +100,19 @@ struct HubReady {
     MsgType type = MsgType::HUB_READY;
 } __attribute__((packed));
 
-// 허브 → 센서노드: 측정 주기 변경 (3바이트)
+// 허브 → 센서노드: 측정 주기 변경 (5바이트)
 // 서버가 허브에 명령 → 허브가 센서노드에 전달.
 // 센서노드는 이 값으로 딥슬립 타이머를 재설정.
 struct SetInterval {
     MsgType  type = MsgType::SET_INTERVAL;
+    uint16_t cmd_id;        // 서버 명령 ID (ACK에서 에코)
     uint16_t interval_sec;  // 딥슬립 주기 (초). 기본 60, 범위 10~3600
 } __attribute__((packed));
 
-// 허브 → 노드: 리셋 명령 (2바이트)
+// 허브 → 노드: 리셋 명령 (4바이트)
 // 원격 초기화용. BOOT 버튼 롱프레스의 원격 버전.
 struct ResetNode {
-    MsgType type = MsgType::RESET_NODE;
-    uint8_t level;  // 0=재부팅(설정 유지), 1=페어링+ID 삭제, 2=공장 초기화(전부 삭제)
+    MsgType  type = MsgType::RESET_NODE;
+    uint16_t cmd_id;  // 서버 명령 ID (ACK에서 에코)
+    uint8_t  level;   // 0=재부팅(설정 유지), 1=페어링+ID 삭제, 2=공장 초기화(전부 삭제)
 } __attribute__((packed));

@@ -51,9 +51,8 @@ static void handleCmdAck(const uint8_t* data, size_t len, const char* srcAddr) {
     if (len < sizeof(CmdAck)) return;
     CmdAck ack;
     memcpy(&ack, data, sizeof(ack));
-    Serial.printf(">> [%s] CMD_ACK: cmd=0x%02x %s\n",
-                  srcAddr, static_cast<uint8_t>(ack.cmd_type),
-                  ack.success ? "ok" : "fail");
+    Serial.printf(">> [%s] CMD_ACK: id=%u %s\n",
+                  srcAddr, ack.cmd_id, ack.success ? "ok" : "fail");
     // TODO: 서버에 ACK 전달 (MQTT report)
 }
 

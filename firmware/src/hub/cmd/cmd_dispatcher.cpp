@@ -21,6 +21,7 @@ static bool handleSetInterval(const MqttCommand& cmd) {
     if (deserializeJson(doc, cmd.payload)) return false;
 
     SetInterval pkt;
+    pkt.cmd_id = cmd.cmd_id;
     pkt.interval_sec = doc["interval_sec"] | 60;
     bool ok = ble_send_to_node(cmd.target, &pkt, sizeof(pkt));
     Serial.printf("<< SET_INTERVAL → %s : %us (%s)\n",
@@ -34,6 +35,7 @@ static bool handleResetNode(const MqttCommand& cmd) {
     if (deserializeJson(doc, cmd.payload)) return false;
 
     ResetNode pkt;
+    pkt.cmd_id = cmd.cmd_id;
     pkt.level = doc["level"] | 0;
     bool ok = ble_send_to_node(cmd.target, &pkt, sizeof(pkt));
     Serial.printf("<< RESET_NODE → %s : level=%u (%s)\n",
@@ -50,7 +52,7 @@ static bool handleIrTiming(const MqttCommand& cmd) {
     if (timings.isNull() || timings.size() == 0) return false;
 
     uint16_t count = timings.size();
-    size_t pktLen = 1 + 2 + count * 2;
+    size_t pktLen = 1 + 2 + 2 + count * 2;  // type(1) + cmd_id(2) + count(2) + timings
     if (pktLen > 500) {
         Serial.printf("<< IR_TIMING → %s : too large (%u bytes)\n",
                       cmd.target, pktLen);
@@ -60,10 +62,11 @@ static bool handleIrTiming(const MqttCommand& cmd) {
     if (!pkt) return false;
 
     pkt[0] = static_cast<uint8_t>(MsgType::IR_TIMING);
-    memcpy(pkt + 1, &count, 2);
+    memcpy(pkt + 1, &cmd.cmd_id, 2);
+    memcpy(pkt + 3, &count, 2);
     for (uint16_t i = 0; i < count; i++) {
         uint16_t val = timings[i];
-        memcpy(pkt + 3 + i * 2, &val, 2);
+        memcpy(pkt + 5 + i * 2, &val, 2);
     }
     bool ok = ble_send_to_node(cmd.target, pkt, pktLen);
     Serial.printf("<< IR_TIMING → %s : %u pulses (%s)\n",
