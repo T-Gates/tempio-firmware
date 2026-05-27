@@ -108,7 +108,6 @@ bool ble_send_to_node(const char* addrStr, const void* data, size_t len) {
     NimBLEAddress addr(std::string(addrStr), 0);
     int slot = findSlotByAddr(addr);
     if (slot < 0 || !nodes[slot].configChar) return false;
-    nodes[slot].configChar->writeValue(
+    return nodes[slot].configChar->writeValue(
         reinterpret_cast<const uint8_t*>(data), len);
-    return true;
 }
