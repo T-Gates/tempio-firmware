@@ -87,7 +87,15 @@ static bool trySend(const MqttCommand& cmd) {
 
 // 명령 진입점: target 비어있으면 허브 자체 명령, 아니면 노드로 전송 시도 → 실패 시 펜딩
 void dispatch_command(const MqttCommand& cmd) {
-    if (cmd.target[0] == '\0') { handle_hub_command(cmd); return; }
+    if (cmd.target[0] == '\0') {
+        char json[256];
+        int len = handle_hub_command(cmd, json, sizeof(json));
+        if (len > 0) {
+            mqtt_publish_report(json);
+            Serial.printf("<< hub cmd published: %s\n", cmd.type);
+        }
+        return;
+    }
 
     if (trySend(cmd)) return;
     pool.push(cmd.target, cmd);
