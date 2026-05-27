@@ -2,6 +2,8 @@
 //
 // 파이썬 비유: dict[node_id] = Queue(maxsize=4)
 // ESP32에선 dict 없으니 고정 슬롯 배열 + used 플래그로 구현
+//
+// 순수 데이터 구조 — 보관/꺼내기만 담당, 전송 방법은 모름
 #pragma once
 #include <Arduino.h>
 #include "thread_safe_queue.h"
@@ -10,8 +12,6 @@
 
 class PendingPool {
 public:
-    using Sender = bool(*)(const MqttCommand&);
-
     PendingPool() { portMUX_INITIALIZE(&mux_); }
 
     // 노드의 펜딩 큐에 명령 추가. 슬롯 부족하면 false.
@@ -23,34 +23,37 @@ public:
         return slot->queue.push(cmd);
     }
 
-    // 특정 노드의 펜딩 큐를 비우며 전송
-    void flush(const char* nodeId, Sender sender) {
+    // 노드의 펜딩 큐에서 명령 하나 꺼냄. 비었으면 false.
+    bool pop(const char* nodeId, MqttCommand* out) {
         portENTER_CRITICAL(&mux_);
         Slot* slot = findSlot(nodeId);
         portEXIT_CRITICAL(&mux_);
-        if (!slot) return;
+        if (!slot) return false;
 
-        MqttCommand cmd;
-        while (slot->queue.pop(&cmd)) {
-            if (!sender(cmd)) {
-                slot->queue.push(cmd);
-                break;
-            }
+        bool ok = slot->queue.pop(out);
+        if (slot->queue.empty()) {
+            portENTER_CRITICAL(&mux_);
+            slot->used = false;
+            portEXIT_CRITICAL(&mux_);
         }
-        releaseIfEmpty(slot);
+        return ok;
     }
 
-    // 모든 노드의 펜딩 큐를 비우며 전송
-    void flushAll(Sender sender) {
-        for (int i = 0; i < MAX_NODES; i++) {
+    // 펜딩 명령이 있는 노드 ID를 하나씩 꺼냄 (순회용)
+    // from 인덱스부터 탐색, 찾으면 true + nodeId에 복사 + from 갱신
+    bool nextNode(int* from, char* nodeId, size_t len) {
+        for (int i = *from; i < MAX_NODES; i++) {
             portENTER_CRITICAL(&mux_);
             bool hasWork = slots_[i].used && !slots_[i].queue.empty();
-            char nodeId[18] = {};
-            if (hasWork) strlcpy(nodeId, slots_[i].node_id, sizeof(nodeId));
+            if (hasWork) strlcpy(nodeId, slots_[i].node_id, len);
             portEXIT_CRITICAL(&mux_);
 
-            if (hasWork) flush(nodeId, sender);
+            if (hasWork) {
+                *from = i + 1;
+                return true;
+            }
         }
+        return false;
     }
 
 private:
@@ -63,7 +66,6 @@ private:
     Slot slots_[MAX_NODES];
     portMUX_TYPE mux_;
 
-    // 호출자가 mux_ 잠근 상태에서 호출
     Slot* findOrCreate(const char* nodeId) {
         for (int i = 0; i < MAX_NODES; i++) {
             if (slots_[i].used && strcmp(slots_[i].node_id, nodeId) == 0)
@@ -79,19 +81,11 @@ private:
         return nullptr;
     }
 
-    // 호출자가 mux_ 잠근 상태에서 호출
     Slot* findSlot(const char* nodeId) {
         for (int i = 0; i < MAX_NODES; i++) {
             if (slots_[i].used && strcmp(slots_[i].node_id, nodeId) == 0)
                 return &slots_[i];
         }
         return nullptr;
-    }
-
-    void releaseIfEmpty(Slot* slot) {
-        if (!slot->queue.empty()) return;
-        portENTER_CRITICAL(&mux_);
-        slot->used = false;
-        portEXIT_CRITICAL(&mux_);
     }
 };

@@ -68,7 +68,6 @@ static bool handleIrTiming(const MqttCommand& cmd) {
     return ok;
 }
 
-// 명령 타입 → 핸들러 라우팅
 static bool trySend(const MqttCommand& cmd) {
     if (strcmp(cmd.type, "SET_INTERVAL") == 0) return handleSetInterval(cmd);
     if (strcmp(cmd.type, "RESET_NODE") == 0)   return handleResetNode(cmd);
@@ -88,9 +87,19 @@ void dispatch_command(const MqttCommand& cmd) {
 }
 
 void flush_node_pending(const char* nodeAddr) {
-    pool.flush(nodeAddr, trySend);
+    MqttCommand cmd;
+    while (pool.pop(nodeAddr, &cmd)) {
+        if (!trySend(cmd)) {
+            pool.push(nodeAddr, cmd);
+            break;
+        }
+    }
 }
 
 void flush_all_pending() {
-    pool.flushAll(trySend);
+    int idx = 0;
+    char nodeId[18];
+    while (pool.nextNode(&idx, nodeId, sizeof(nodeId))) {
+        flush_node_pending(nodeId);
+    }
 }
