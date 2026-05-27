@@ -1,56 +1,59 @@
-// 서버 → 허브 MQTT 명령을 BLE 바이너리 패킷으로 변환해서 노드에 전달
-// 파이썬으로 치면: json dict를 struct.pack()으로 바이트 변환 후 BLE 전송
+// MQTT 명령 → BLE 패킷 변환·전달
+//
+// 역할: JSON payload를 바이너리 구조체로 변환해서 ble_send_to_node() 호출.
+// 즉시 전송 실패 시 PendingPool에 보관, 나중에 flush로 재시도.
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <protocol.h>
 #include "cmd_dispatcher.h"
 #include "ble/ble_central.h"
+#include "config.h"
+#include "util/pending_pool.h"
 
-// 센서노드 측정 주기 변경. payload 예: {"interval_sec": 30}
-static void handleSetInterval(const MqttCommand& cmd) {
+static PendingPool pool;
+
+// ──────────── BLE 패킷 변환 + 전송 ────────────
+
+static bool handleSetInterval(const MqttCommand& cmd) {
     JsonDocument doc;
-    if (deserializeJson(doc, cmd.payload)) return;
+    if (deserializeJson(doc, cmd.payload)) return false;
 
     SetInterval pkt;
-    pkt.interval_sec = doc["interval_sec"] | 60;  // 파이썬 dict.get("key", 60)과 같은 패턴
+    pkt.interval_sec = doc["interval_sec"] | 60;
     bool ok = ble_send_to_node(cmd.target, &pkt, sizeof(pkt));
     Serial.printf("<< SET_INTERVAL → %s : %us (%s)\n",
                   cmd.target, pkt.interval_sec, ok ? "ok" : "fail");
+    return ok;
 }
 
-// 노드 리셋. level 0=소프트, 1=팩토리
-static void handleResetNode(const MqttCommand& cmd) {
+static bool handleResetNode(const MqttCommand& cmd) {
     JsonDocument doc;
-    if (deserializeJson(doc, cmd.payload)) return;
+    if (deserializeJson(doc, cmd.payload)) return false;
 
     ResetNode pkt;
     pkt.level = doc["level"] | 0;
     bool ok = ble_send_to_node(cmd.target, &pkt, sizeof(pkt));
     Serial.printf("<< RESET_NODE → %s : level=%u (%s)\n",
                   cmd.target, pkt.level, ok ? "ok" : "fail");
+    return ok;
 }
 
-// IR 신호 전송. payload 예: {"timings": [9000, 4500, 560, ...]}
-// timings 배열 = IR LED on/off 마이크로초 시퀀스 (에어컨 리모컨 신호)
-static void handleIrTiming(const MqttCommand& cmd) {
+static bool handleIrTiming(const MqttCommand& cmd) {
     JsonDocument doc;
-    if (deserializeJson(doc, cmd.payload)) return;
+    if (deserializeJson(doc, cmd.payload)) return false;
 
     JsonArray timings = doc["timings"].as<JsonArray>();
-    if (timings.isNull() || timings.size() == 0) return;
+    if (timings.isNull() || timings.size() == 0) return false;
 
     uint16_t count = timings.size();
-    // 패킷 구조: [MsgType 1B][count 2B][timing값들 count*2B]
     size_t pktLen = 1 + 2 + count * 2;
-    // BLE 한 번에 보낼 수 있는 최대 크기(MTU) 제한
     if (pktLen > 500) {
         Serial.printf("<< IR_TIMING → %s : too large (%u bytes)\n",
                       cmd.target, pktLen);
-        return;
+        return false;
     }
-    // 가변 길이라 스택 대신 힙 할당 — 파이썬의 bytearray()와 비슷
     uint8_t* pkt = (uint8_t*)malloc(pktLen);
-    if (!pkt) return;
+    if (!pkt) return false;
 
     pkt[0] = static_cast<uint8_t>(MsgType::IR_TIMING);
     memcpy(pkt + 1, &count, 2);
@@ -62,17 +65,32 @@ static void handleIrTiming(const MqttCommand& cmd) {
     Serial.printf("<< IR_TIMING → %s : %u pulses (%s)\n",
                   cmd.target, count, ok ? "ok" : "fail");
     free(pkt);
+    return ok;
 }
 
-// cmd.type 문자열로 분기 — C++에선 문자열 switch가 안 돼서 strcmp 사용
+// 명령 타입 → 핸들러 라우팅
+static bool trySend(const MqttCommand& cmd) {
+    if (strcmp(cmd.type, "SET_INTERVAL") == 0) return handleSetInterval(cmd);
+    if (strcmp(cmd.type, "RESET_NODE") == 0)   return handleResetNode(cmd);
+    if (strcmp(cmd.type, "IR_TIMING") == 0)     return handleIrTiming(cmd);
+    Serial.printf("<< unknown cmd: %s\n", cmd.type);
+    return false;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 공개 API
+// ══════════════════════════════════════════════════════════════════════
+
 void dispatch_command(const MqttCommand& cmd) {
-    if (strcmp(cmd.type, "SET_INTERVAL") == 0) {
-        handleSetInterval(cmd);
-    } else if (strcmp(cmd.type, "RESET_NODE") == 0) {
-        handleResetNode(cmd);
-    } else if (strcmp(cmd.type, "IR_TIMING") == 0) {
-        handleIrTiming(cmd);
-    } else {
-        Serial.printf("<< unknown cmd: %s\n", cmd.type);
-    }
+    if (trySend(cmd)) return;
+    pool.push(cmd.target, cmd);
+    Serial.printf(">> pending: %s → %s\n", cmd.type, cmd.target);
+}
+
+void flush_node_pending(const char* nodeAddr) {
+    pool.flush(nodeAddr, trySend);
+}
+
+void flush_all_pending() {
+    pool.flushAll(trySend);
 }
