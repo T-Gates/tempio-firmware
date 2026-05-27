@@ -58,7 +58,7 @@ static bool handleIrTiming(const MqttCommand& cmd) {
                       cmd.target, pktLen);
         return false;
     }
-    auto* pkt = static_cast<uint8_t*>(malloc(pktLen));
+    auto* pkt = new uint8_t[pktLen];
     if (!pkt) return false;
 
     pkt[0] = static_cast<uint8_t>(MsgType::IR_TIMING);
@@ -71,7 +71,7 @@ static bool handleIrTiming(const MqttCommand& cmd) {
     bool ok = ble_send_to_node(cmd.target, pkt, pktLen);
     Serial.printf("<< IR_TIMING → %s : %u pulses (%s)\n",
                   cmd.target, count, ok ? "ok" : "fail");
-    free(pkt);
+    delete[] pkt;
     return ok;
 }
 
