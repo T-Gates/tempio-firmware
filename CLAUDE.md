@@ -49,7 +49,7 @@ tempio/
 │   └── mosquitto/config/
 │       └── mosquitto.conf    <- TCP 1883 + WebSocket 9001
 ├── docs/               <- 스펙, 로드맵, 개발 노트
-│   ├── SPEC.md
+│   ├── spec/           <- 기술 스펙 (BLE, MQTT, 명령, 노드, API 등)
 │   ├── ROADMAP.md
 │   └── NOTES.md
 └── CLAUDE.md
