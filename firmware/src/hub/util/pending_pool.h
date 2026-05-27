@@ -4,6 +4,7 @@
 // ESP32에선 dict 없으니 고정 슬롯 배열 + used 플래그로 구현
 //
 // 순수 데이터 구조 — 보관/꺼내기만 담당, 전송 방법은 모름
+// TTL: push 시 millis() 기록, pop 시 만료된 명령은 자동 폐기
 #pragma once
 #include <Arduino.h>
 #include "thread_safe_queue.h"
@@ -14,33 +15,40 @@ class PendingPool {
 public:
     PendingPool() { portMUX_INITIALIZE(&mux_); }
 
-    // 노드의 펜딩 큐에 명령 추가. 슬롯 부족하면 false.
+    // 노드의 펜딩 큐에 명령 추가. 타임스탬프 자동 기록.
     bool push(const char* nodeId, const MqttCommand& cmd) {
         portENTER_CRITICAL(&mux_);
         Slot* slot = findOrCreate(nodeId);
         portEXIT_CRITICAL(&mux_);
         if (!slot) return false;
-        return slot->queue.push(cmd);
+
+        MqttCommand stamped = cmd;
+        stamped.queued_at = millis();
+        return slot->queue.push(stamped);
     }
 
-    // 노드의 펜딩 큐에서 명령 하나 꺼냄. 비었으면 false.
+    // 노드의 펜딩 큐에서 유효한 명령 하나 꺼냄.
+    // 만료된 명령은 건너뛰고 폐기.
     bool pop(const char* nodeId, MqttCommand* out) {
         portENTER_CRITICAL(&mux_);
         Slot* slot = findSlot(nodeId);
         portEXIT_CRITICAL(&mux_);
         if (!slot) return false;
 
-        bool ok = slot->queue.pop(out);
-        if (slot->queue.empty()) {
-            portENTER_CRITICAL(&mux_);
-            slot->used = false;
-            portEXIT_CRITICAL(&mux_);
+        uint32_t now = millis();
+        MqttCommand cmd;
+        while (slot->queue.pop(&cmd)) {
+            if (now - cmd.queued_at < CMD_TTL_MS) {
+                *out = cmd;
+                return true;
+            }
+            Serial.printf(">> expired: %s → %s\n", cmd.type, cmd.target);
         }
-        return ok;
+        releaseIfEmpty(slot);
+        return false;
     }
 
     // 펜딩 명령이 있는 노드 ID를 하나씩 꺼냄 (순회용)
-    // from 인덱스부터 탐색, 찾으면 true + nodeId에 복사 + from 갱신
     bool nextNode(int* from, char* nodeId, size_t len) {
         for (int i = *from; i < MAX_NODES; i++) {
             portENTER_CRITICAL(&mux_);
@@ -87,5 +95,12 @@ private:
                 return &slots_[i];
         }
         return nullptr;
+    }
+
+    void releaseIfEmpty(Slot* slot) {
+        if (!slot->queue.empty()) return;
+        portENTER_CRITICAL(&mux_);
+        slot->used = false;
+        portEXIT_CRITICAL(&mux_);
     }
 };

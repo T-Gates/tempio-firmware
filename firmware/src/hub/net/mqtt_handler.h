@@ -1,5 +1,8 @@
 // MQTT 클라이언트 — ESP-IDF esp_mqtt 기반, WebSocket(WSS) 전송
 // Cloudflare 터널 경유: wss://mqtt.yuumi.wiki/mqtt → 로컬 Mosquitto
+//
+// 수신된 명령은 글로벌 큐 없이 바로 dispatch_command()로 전달.
+// 노드별 펜딩 큐는 cmd_dispatcher.cpp에서 관리.
 #pragma once
 #include <stdint.h>
 
@@ -8,6 +11,7 @@ struct MqttCommand {
     char target[18];    // 대상 노드 MAC "aa:bb:cc:dd:ee:ff"
     char type[16];      // 명령 타입: "SET_INTERVAL", "IR_TIMING", "RESET_NODE"
     char payload[256];  // JSON payload 문자열 (타입별 파라미터)
+    uint32_t queued_at; // 큐 진입 시각 (millis). 펜딩 풀에서 TTL 판단용.
 };
 
 // MQTT 클라이언트 초기화. broker_uri 예: "wss://mqtt.yuumi.wiki/mqtt"
@@ -22,10 +26,3 @@ bool mqtt_is_connected();
 
 // 센서 리포트 JSON을 tempio/{hub_id}/report 토픽에 발행.
 bool mqtt_publish_report(const char* json);
-
-// 명령 큐에 대기 중인 명령이 있는지.
-bool mqtt_has_command();
-
-// 명령 큐에서 하나를 꺼낸다. 없으면 false.
-// 파이썬의 queue.get_nowait()과 비슷.
-bool mqtt_get_command(MqttCommand* cmd);

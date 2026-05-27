@@ -14,8 +14,8 @@
 #define PENDING_MAX       8
 #define REPORT_QUEUE_MAX  8
 
-// MQTT
-#define CMD_QUEUE_MAX     8
+#define CMD_PENDING_PER_NODE  4
+#define CMD_TTL_MS            300000  // 펜딩 명령 유효기간 (5분)
 
 // BLE Scan
 #define BLE_SCAN_INTERVAL 100
