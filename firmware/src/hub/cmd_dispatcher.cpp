@@ -8,7 +8,7 @@
 #include "cmd_dispatcher.h"
 #include "ble/ble_central.h"
 #include "config.h"
-#include "net/mqtt_handler.h"
+#include "hub_command.h"
 #include "util/pending_pool.h"
 
 static PendingPool pool;
@@ -69,27 +69,6 @@ static bool handleIrTiming(const MqttCommand& cmd) {
     return ok;
 }
 
-// target이 비어있는 명령 = 허브 자체 명령
-static void handleHubCommand(const MqttCommand& cmd) {
-    if (strcmp(cmd.type, "HUB_STATUS") == 0) handleHubStatus();
-    else Serial.printf("<< unknown hub cmd: %s\n", cmd.type);
-}
-
-static void handleHubStatus() {
-    char json[256];
-    JsonDocument doc;
-    doc["type"] = "hub_status";
-    doc["ble_connected"] = ble_connected_count();
-    doc["pending_slots"] = pool.activeSlots();
-    doc["pending_commands"] = pool.totalPending();
-    doc["free_heap"] = ESP.getFreeHeap();
-    doc["uptime_ms"] = millis();
-    doc["mqtt_connected"] = mqtt_is_connected();
-    serializeJson(doc, json, sizeof(json));
-    mqtt_publish_report(json);
-    Serial.println("<< HUB_STATUS published");
-}
-
 static bool trySend(const MqttCommand& cmd) {
     if (strcmp(cmd.type, "SET_INTERVAL") == 0) return handleSetInterval(cmd);
     if (strcmp(cmd.type, "RESET_NODE") == 0)   return handleResetNode(cmd);
@@ -103,7 +82,7 @@ static bool trySend(const MqttCommand& cmd) {
 // ══════════════════════════════════════════════════════════════════════
 
 void dispatch_command(const MqttCommand& cmd) {
-    if (cmd.target[0] == '\0') { handleHubCommand(cmd); return; }
+    if (cmd.target[0] == '\0') { handle_hub_command(cmd); return; }
 
     if (trySend(cmd)) return;
     pool.push(cmd.target, cmd);
