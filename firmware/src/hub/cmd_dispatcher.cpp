@@ -103,3 +103,6 @@ void flush_all_pending() {
         flush_node_pending(nodeId);
     }
 }
+
+int pending_active_slots() { return pool.activeSlots(); }
+int pending_total_commands() { return pool.totalPending(); }

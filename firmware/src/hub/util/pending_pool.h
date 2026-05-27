@@ -48,6 +48,28 @@ public:
         return false;
     }
 
+    // 펜딩 명령이 있는 노드 수
+    int activeSlots() const {
+        int n = 0;
+        for (int i = 0; i < MAX_NODES; i++) {
+            portENTER_CRITICAL(&mux_);
+            if (slots_[i].used) n++;
+            portEXIT_CRITICAL(&mux_);
+        }
+        return n;
+    }
+
+    // 전체 펜딩 명령 수
+    int totalPending() const {
+        int n = 0;
+        for (int i = 0; i < MAX_NODES; i++) {
+            portENTER_CRITICAL(&mux_);
+            if (slots_[i].used) n += slots_[i].queue.count();
+            portEXIT_CRITICAL(&mux_);
+        }
+        return n;
+    }
+
     // 펜딩 명령이 있는 노드 ID를 하나씩 꺼냄 (순회용)
     bool nextNode(int* from, char* nodeId, size_t len) {
         for (int i = *from; i < MAX_NODES; i++) {
