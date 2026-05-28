@@ -58,6 +58,14 @@ class ConfigCB : public NimBLECharacteristicCallbacks {
                     memcpy(&cmd, val.data(), sizeof(cmd));
                     state.setSleepInterval(cmd.interval_sec);
                     Serial.printf(">> interval: %u sec\n", state.sleepInterval());
+
+                    if (cmd.cmd_id && pDataChar && deviceConnected) {
+                        CmdAck ack;
+                        ack.cmd_id = cmd.cmd_id;
+                        ack.success = 1;
+                        pDataChar->setValue(reinterpret_cast<uint8_t*>(&ack), sizeof(ack));
+                        pDataChar->notify();
+                    }
                 }
                 break;
             }
@@ -69,6 +77,29 @@ class ConfigCB : public NimBLECharacteristicCallbacks {
                     if (cmd.level >= 1) state.clear();
                     state.end();
                     ESP.restart();
+                }
+                break;
+            }
+            case MsgType::TEST_CMD: {
+                if (val.length() >= sizeof(TestCmd)) {
+                    TestCmd cmd;
+                    memcpy(&cmd, val.data(), sizeof(cmd));
+                    Serial.printf(">> TEST: cmd_id=%u led=%u\n", cmd.cmd_id, cmd.led);
+
+                    if (cmd.led && pDataChar) {
+                        digitalWrite(LED_PIN, LOW);
+                        delay(200);
+                        digitalWrite(LED_PIN, HIGH);
+                    }
+
+                    CmdAck ack;
+                    ack.cmd_id = cmd.cmd_id;
+                    ack.success = 1;
+                    if (pDataChar && deviceConnected) {
+                        pDataChar->setValue(reinterpret_cast<uint8_t*>(&ack), sizeof(ack));
+                        pDataChar->notify();
+                        Serial.printf("<< CMD_ACK: id=%u ok\n", ack.cmd_id);
+                    }
                 }
                 break;
             }

@@ -75,11 +75,26 @@ static bool handleIrTiming(const MqttCommand& cmd) {
     return ok;
 }
 
+// TEST → TestCmd 구조체로 변환 후 BLE 전송
+static bool handleTest(const MqttCommand& cmd) {
+    JsonDocument doc;
+    deserializeJson(doc, cmd.payload);
+
+    TestCmd pkt;
+    pkt.cmd_id = cmd.cmd_id;
+    pkt.led = doc["led"] | 0;
+    bool ok = bleSendToNode(cmd.target, &pkt, sizeof(pkt));
+    Serial.printf("<< TEST → %s : led=%u (%s)\n",
+                  cmd.target, pkt.led, ok ? "ok" : "fail");
+    return ok;
+}
+
 // 명령 타입별 핸들러로 라우팅. 알 수 없는 타입이면 false.
 static bool trySend(const MqttCommand& cmd) {
     if (strcmp(cmd.type, "SET_INTERVAL") == 0) return handleSetInterval(cmd);
     if (strcmp(cmd.type, "RESET_NODE") == 0)   return handleResetNode(cmd);
     if (strcmp(cmd.type, "IR_TIMING") == 0)     return handleIrTiming(cmd);
+    if (strcmp(cmd.type, "TEST") == 0)          return handleTest(cmd);
     Serial.printf("<< unknown cmd: %s\n", cmd.type);
     return false;
 }

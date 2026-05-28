@@ -29,6 +29,7 @@ enum class MsgType : uint8_t {
     HUB_READY      = 0x10,  // 허브 → 노드: "subscribe 완료, 데이터 보내도 돼" (연결 직후)
     SET_INTERVAL   = 0x12,  // 허브 → 센서노드: 측정 주기 변경 (초 단위)
     RESET_NODE     = 0x13,  // 허브 → 노드: 리셋 명령 (레벨별)
+    TEST_CMD       = 0x14,  // 허브 → 노드: E2E 테스트용 핑 (ACK 회신 검증)
 
     NODE_INFO      = 0x20,  // 노드 → 허브: 연결 직후 자기 소개 (타입, ID, 배터리, 펌웨어)
     CMD_ACK        = 0x21,  // 노드 → 허브: 서버 명령 실행 결과 회신
@@ -89,6 +90,15 @@ struct CmdAck {
     MsgType  type = MsgType::CMD_ACK;
     uint16_t cmd_id;   // 서버가 부여한 명령 ID (에코)
     uint8_t  success;  // 1=성공, 0=실패
+} __attribute__((packed));
+
+// 허브 → 노드: E2E 테스트 핑 (4바이트)
+// 노드가 수신하면 CMD_ACK를 회신. led=1이면 LED도 한 번 깜빡임.
+// 서버에서 통신 경로 전체(서버→허브→노드→허브→서버)를 검증할 때 사용.
+struct TestCmd {
+    MsgType  type = MsgType::TEST_CMD;
+    uint16_t cmd_id;  // 서버 명령 ID (ACK에서 에코)
+    uint8_t  led;     // 1이면 LED 깜빡임, 0이면 핑퐁만
 } __attribute__((packed));
 
 // ──────────── 설정 명령 ────────────
