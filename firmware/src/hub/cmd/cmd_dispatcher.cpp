@@ -114,6 +114,7 @@ void dispatchCommand(const MqttCommand& cmd) {
 
 // 특정 노드의 펜딩 큐에서 명령을 꺼내 전송. 실패하면 다시 넣고 중단.
 void flushNodePending(const char* nodeAddr) {
+    if (!bleIsNodeConnected(nodeAddr)) return;
     MqttCommand cmd;
     while (pool.pop(nodeAddr, &cmd)) {
         if (!trySend(cmd)) {

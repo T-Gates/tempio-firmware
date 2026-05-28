@@ -117,6 +117,11 @@ int bleConnectedCount() {
     return activeCount();
 }
 
+bool bleIsNodeConnected(const char* addrStr) {
+    NimBLEAddress addr(std::string(addrStr), 0);
+    return isAlreadyConnected(addr);
+}
+
 // MAC 주소 문자열로 노드를 찾아 CONFIG 특성에 바이너리 write
 bool bleSendToNode(const char* addrStr, const void* data, size_t len) {
     NimBLEAddress addr(std::string(addrStr), 0);

@@ -12,6 +12,9 @@ void bleCentralLoop();
 // 현재 BLE로 연결된 노드 수.
 int bleConnectedCount();
 
+// 특정 노드가 현재 BLE 연결 중인지.
+bool bleIsNodeConnected(const char* addrStr);
+
 // 특정 노드에 바이너리 데이터 전송. addrStr은 "aa:bb:cc:dd:ee:ff" 형태.
 // 내부적으로 CONFIG 특성에 write. 성공 true, 미연결/실패 false.
 bool bleSendToNode(const char* addrStr, const void* data, size_t len);
