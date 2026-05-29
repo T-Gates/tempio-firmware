@@ -128,5 +128,5 @@ bool bleSendToNode(const char* addrStr, const void* data, size_t len) {
     int slot = findSlotByAddr(addr);
     if (slot < 0 || !nodes[slot].configChar) return false;
     return nodes[slot].configChar->writeValue(
-        reinterpret_cast<const uint8_t*>(data), len);
+        reinterpret_cast<const uint8_t*>(data), len, true);
 }

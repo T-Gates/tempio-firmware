@@ -39,7 +39,15 @@ void loop() {
         Serial.printf(">> MQTT published: %s\n", report.node_id);
     }
 
-    // 연결된 노드 중 펜딩 명령이 있으면 전송 시도 (TTL 만료 명령도 여기서 정리)
+    // BLE로 들어온 CMD_ACK를 MQTT로 서버에 전달
+    CmdAckReport ack;
+    while (bleGetPendingAck(&ack)) {
+        char json[128];
+        ack.toJson(json, sizeof(json));
+        mqttPublishReport(json);
+        Serial.printf(">> MQTT ack: node=%s cmd=%u\n", ack.node_id, ack.cmd_id);
+    }
+
     flushAllPending();
 
     delay(LOOP_DELAY_MS);

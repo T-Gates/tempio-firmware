@@ -1,14 +1,12 @@
 // BLE 데이터 수신 — notify 콜백으로 센서 데이터를 받아서 리포트 큐에 적재
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <cstring>
 #include "ble_internal.h"
 #include "ble_data.h"
-#include "../net/mqtt_handler.h"
 #include "../util/thread_safe_queue.h"
 
-// onDataNotify(NimBLE 태스크) → push, bleGetPendingReport(Arduino loop) → pop
 static ThreadSafeQueue<SensorReport, REPORT_QUEUE_MAX> reportQueue;
+static ThreadSafeQueue<CmdAckReport, CMD_PENDING_PER_NODE> ackQueue;
 
 // notify를 보낸 특성 → 클라이언트 → 슬롯 인덱스 역추적
 static int resolveSourceSlot(NimBLERemoteCharacteristic* c) {
@@ -47,7 +45,6 @@ static void enqueueReport(const SensorReport& rpt) {
     reportQueue.push(rpt);
 }
 
-// CMD_ACK 수신 → MQTT report로 서버에 전달
 static void handleCmdAck(const uint8_t* data, size_t len, const char* srcAddr) {
     if (len < sizeof(CmdAck)) return;
     CmdAck ack;
@@ -55,14 +52,11 @@ static void handleCmdAck(const uint8_t* data, size_t len, const char* srcAddr) {
     Serial.printf(">> [%s] CMD_ACK: id=%u %s\n",
                   srcAddr, ack.cmd_id, ack.success ? "ok" : "fail");
 
-    char json[128];
-    JsonDocument doc;
-    doc["type"] = "cmd_ack";
-    doc["node_id"] = srcAddr;
-    doc["cmd_id"] = ack.cmd_id;
-    doc["success"] = ack.success;
-    serializeJson(doc, json, sizeof(json));
-    mqttPublishReport(json);
+    CmdAckReport rpt;
+    strlcpy(rpt.node_id, srcAddr, sizeof(rpt.node_id));
+    rpt.cmd_id = ack.cmd_id;
+    rpt.success = ack.success;
+    ackQueue.push(rpt);
 }
 
 // SENSOR_DATA 메시지 처리 — 파싱 → 리포트 생성 → 큐에 적재
@@ -102,4 +96,8 @@ void onDataNotify(NimBLERemoteCharacteristic* c,
 
 bool bleGetPendingReport(SensorReport* out) {
     return reportQueue.pop(out);
+}
+
+bool bleGetPendingAck(CmdAckReport* out) {
+    return ackQueue.pop(out);
 }

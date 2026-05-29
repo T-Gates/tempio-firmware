@@ -103,6 +103,34 @@ static bool trySend(const MqttCommand& cmd) {
 // 공개 API
 // ══════════════════════════════════════════════════════════════════════
 
+void parseAndDispatchCommands(const char* data, int len) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, data, len);
+    if (err) {
+        Serial.printf("cmd json err: %s\n", err.c_str());
+        return;
+    }
+
+    JsonArray commands = doc["commands"].as<JsonArray>();
+    if (commands.isNull()) return;
+
+    for (JsonObject obj : commands) {
+        MqttCommand cmd;
+        strlcpy(cmd.target, obj["target"] | "", sizeof(cmd.target));
+        strlcpy(cmd.type, obj["type"] | "", sizeof(cmd.type));
+
+        cmd.cmd_id = obj["cmd_id"] | 0;
+
+        if (obj["payload"].is<JsonObject>()) {
+            serializeJson(obj["payload"], cmd.payload, sizeof(cmd.payload));
+        } else {
+            strlcpy(cmd.payload, obj["payload"] | "", sizeof(cmd.payload));
+        }
+
+        dispatchCommand(cmd);
+    }
+}
+
 // 명령 진입점: target 비어있으면 허브 자체 명령, 아니면 노드로 전송 시도 → 실패 시 펜딩
 void dispatchCommand(const MqttCommand& cmd) {
     if (cmd.target[0] == '\0') { handleHubCommand(cmd); return; }
@@ -118,7 +146,7 @@ void flushNodePending(const char* nodeAddr) {
     MqttCommand cmd;
     while (pool.pop(nodeAddr, &cmd)) {
         if (!trySend(cmd)) {
-            pool.push(nodeAddr, cmd);
+            pool.pushFront(nodeAddr, cmd);
             break;
         }
     }

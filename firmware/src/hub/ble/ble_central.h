@@ -2,6 +2,7 @@
 #pragma once
 #include <stdint.h>
 #include "../dto/sensor_report.h"
+#include "../dto/cmd_ack_report.h"
 
 // BLE 스택 초기화 + 스캔 시작. setup()에서 한 번만 호출.
 void bleCentralInit();
@@ -20,5 +21,7 @@ bool bleIsNodeConnected(const char* addrStr);
 bool bleSendToNode(const char* addrStr, const void* data, size_t len);
 
 // 링 버퍼에서 센서 리포트 하나를 꺼낸다. 새 데이터 없으면 false.
-// 파이썬의 queue.get_nowait()과 비슷 — 없으면 바로 리턴.
 bool bleGetPendingReport(SensorReport* out);
+
+// CMD_ACK 큐에서 하나 꺼낸다. 새 데이터 없으면 false.
+bool bleGetPendingAck(CmdAckReport* out);

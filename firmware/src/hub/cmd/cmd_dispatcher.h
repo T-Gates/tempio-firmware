@@ -7,6 +7,10 @@
 #pragma once
 #include "../dto/mqtt_command.h"
 
+// MQTT로 수신된 JSON 데이터를 파싱해서 명령별로 디스패치.
+// esp_mqtt 태스크에서 호출됨 — Arduino loop가 아닌 다른 태스크!
+void parseAndDispatchCommands(const char* data, int len);
+
 // 명령 수신 시 호출. 연결된 노드면 즉시 전송, 아니면 펜딩 큐에 보관.
 // esp_mqtt 태스크에서 호출될 수 있으므로 내부적으로 portMUX 보호.
 void dispatchCommand(const MqttCommand& cmd);

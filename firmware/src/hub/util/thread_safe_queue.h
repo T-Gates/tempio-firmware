@@ -117,6 +117,15 @@ public:
         return true;
     }
 
+    // lock 없이 앞에 삽입. 호출자가 lock 보장 필수.
+    bool pushFrontUnsafe(const T& item) {
+        if (count_ >= N) return false;
+        head_ = (head_ - 1 + N) % N;
+        buf_[head_] = item;
+        count_++;
+        return true;
+    }
+
 private:
     T buf_[N];                  // 고정 크기 링 버퍼 (파이썬 list와 달리 힙 할당 없음)
     volatile int head_;         // 다음에 꺼낼 위치

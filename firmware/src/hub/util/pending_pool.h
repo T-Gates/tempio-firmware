@@ -33,6 +33,22 @@ public:
         return ok;
     }
 
+    // 노드의 펜딩 큐 앞에 명령 삽입 (순서 유지용).
+    bool pushFront(const char* nodeId, const MqttCommand& cmd) {
+        MqttCommand stamped = cmd;
+        stamped.queued_at = millis();
+
+        portENTER_CRITICAL(&mux_);
+        Slot* slot = findOrCreate(nodeId);
+        if (!slot) {
+            portEXIT_CRITICAL(&mux_);
+            return false;
+        }
+        bool ok = slot->queue.pushFrontUnsafe(stamped);
+        portEXIT_CRITICAL(&mux_);
+        return ok;
+    }
+
     // 노드의 펜딩 큐에서 유효한 명령 하나 꺼냄.
     // 만료된 명령은 건너뛰고 폐기.
     // lock 범위: findSlot + popUnsafe + releaseIfEmpty 전체를 보호
